@@ -4840,7 +4840,11 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
  * Also called internaly with chandef set to NULL simply to retrieve the channel
  * configured at firmware level.
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
 static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
+#else
+static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct net_device *dev,
+#endif
 											 struct cfg80211_chan_def *chandef)
 {
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -5289,7 +5293,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
 
 	if (rwnx_vif->vif_index == rwnx_hw->monitor_vif) {
 		//retrieve channel from firmware
-		rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
+		rwnx_cfg80211_set_monitor_channel(wiphy, NULL, NULL);
 	}
 
 	//Check if channel context is valid
