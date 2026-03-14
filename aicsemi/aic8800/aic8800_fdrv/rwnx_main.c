@@ -4952,7 +4952,11 @@ void rwnx_cfg80211_mgmt_frame_register(struct wiphy *wiphy,
  *	have changed. The actual parameter values are available in
  *	struct wiphy. If returning an error, no value should be changed.
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
 static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
+#else
+static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, int link_id, u32 changed)
+#endif
 {
 	return 0;
 }
