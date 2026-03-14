@@ -2427,7 +2427,11 @@ check_len_update:
 													   sta->mac_addr, GFP_ATOMIC);
 #else
                     cfg80211_rx_unexpected_4addr_frame(rwnx_vif->ndev,
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 19, 0)
+                                                       sta->mac_addr, -1, GFP_ATOMIC);
+#else
                                                        sta->mac_addr, GFP_ATOMIC);
+#endif
 #endif
 				}
 			}
