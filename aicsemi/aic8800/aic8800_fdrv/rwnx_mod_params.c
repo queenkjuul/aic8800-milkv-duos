@@ -1728,7 +1728,7 @@ void rwnx_custregd(struct rwnx_hw *rwnx_hw, struct wiphy *wiphy)
     if (!rwnx_hw->mod_params->custregd)
         return;
 
-    wiphy->regulatory_flags |= REGULATORY_IGNORE_STALE_KICKOFF;
+    // wiphy->regulatory_flags |= REGULATORY_IGNORE_STALE_KICKOFF;
     wiphy->regulatory_flags |= REGULATORY_WIPHY_SELF_MANAGED;
 
     rtnl_lock();
