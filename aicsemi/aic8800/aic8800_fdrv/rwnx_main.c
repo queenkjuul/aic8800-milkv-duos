@@ -3098,7 +3098,7 @@ void aicwf_p2p_alive_timeout(struct timer_list *t)
 	rwnx_vif = (struct rwnx_vif *)data;
 	rwnx_hw = rwnx_vif->rwnx_hw;
 	#else
-	rwnx_hw = from_timer(rwnx_hw, t, p2p_alive_timer);
+	rwnx_hw = timer_container_of(rwnx_hw, t, p2p_alive_timer);
 	rwnx_vif = rwnx_hw->p2p_dev_vif;
 	#endif
 
@@ -3528,7 +3528,7 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
 		rwnx_hw->is_p2p_alive = 0;
 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
-			del_timer_sync(&rwnx_hw->p2p_alive_timer);
+			timer_delete_sync(&rwnx_hw->p2p_alive_timer);
 		}
 
 		if (rwnx_vif->up) {
@@ -7247,7 +7247,7 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
 		list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
 			list_del_init(&defrag_ctrl->list);
 			if (timer_pending(&defrag_ctrl->defrag_timer))
-				del_timer_sync(&defrag_ctrl->defrag_timer);
+				timer_delete_sync(&defrag_ctrl->defrag_timer);
 			dev_kfree_skb(defrag_ctrl->skb);
 			kfree(defrag_ctrl);
 		}
