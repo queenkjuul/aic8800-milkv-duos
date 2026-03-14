@@ -2125,9 +2125,17 @@ check_len_update:
 		rwnx_vif = rwnx_rx_get_vif(rwnx_hw, hw_rxhdr->flags_vif_idx);
 		if (rwnx_vif) {
 #ifdef CONFIG_GKI
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+			rwnx_cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, -1, GFP_ATOMIC);
+#else
 			rwnx_cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, GFP_ATOMIC);
+#endif
+#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+            cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, -1, GFP_ATOMIC);
 #else
             cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, GFP_ATOMIC);
+#endif
 #endif
 		}
 		goto end;
