@@ -4970,6 +4970,9 @@ static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, int link_id, u32 
  *	(as advertised by the nl80211 feature flag.)
  */
 static int rwnx_cfg80211_set_tx_power(struct wiphy *wiphy, struct wireless_dev *wdev,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+										int link_id,
+#endif
 									  enum nl80211_tx_power_setting type, int mbm)
 {
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -5435,6 +5438,9 @@ int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
 									#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0))
 										, u32 cac_time_ms
 									#endif
+									#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0))
+										, int link_id
+									#endif
 										)
 {
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -5578,7 +5584,9 @@ int rwnx_cfg80211_channel_switch (struct wiphy *wiphy,
 		goto end;
 	} else {
 		INIT_WORK(&csa->work, rwnx_csa_finish);
-#if LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION4
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);
+#elif LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION4
 		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false, 0);
 #elif LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION2
 		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);
@@ -5606,6 +5614,9 @@ rwnx_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 	const u8 *peer,
 #else
 	u8 *peer,
+#endif
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 19, 0)
+	int link_id,
 #endif
 	u8 action_code,
 	u8 dialog_token,
