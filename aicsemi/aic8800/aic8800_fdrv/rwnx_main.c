@@ -771,8 +771,8 @@ static void rwnx_csa_finish(struct work_struct *ws)
 		cfg80211_disconnected(vif->ndev, 0, NULL, 0, 0, GFP_KERNEL);
 		#endif
 	} else {
-		mutex_lock(&vif->wdev.mtx);
-		__acquire(&vif->wdev.mtx);
+		mutex_lock(&vif->rwnx_hw->wiphy->mtx);
+		__acquire(&vif->rwnx_hw->wiphy->mtx);
 		spin_lock_bh(&rwnx_hw->cb_lock);
 		rwnx_chanctx_unlink(vif);
 		rwnx_chanctx_link(vif, csa->ch_idx, &csa->chandef);
@@ -789,8 +789,8 @@ static void rwnx_csa_finish(struct work_struct *ws)
 #else
 		cfg80211_ch_switch_notify(vif->ndev, &csa->chandef);
 #endif
-		mutex_unlock(&vif->wdev.mtx);
-		__release(&vif->wdev.mtx);
+		mutex_unlock(&vif->rwnx_hw->wiphy->mtx);
+		__release(&vif->rwnx_hw->wiphy->mtx);
 	}
 	rwnx_del_csa(vif);
 }
