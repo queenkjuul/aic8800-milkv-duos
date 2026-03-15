@@ -44,9 +44,95 @@ extern void set_power_control_lock(int lock);
 #endif//for AML
 
 #ifdef CONFIG_PLATFORM_CVITEK
-extern int cvi_get_wifi_pwr_on_gpio(void);
-extern int cvi_sdio_rescan(void);
+#include <linux/platform_device.h>
+#include <linux/gpio/driver.h>
+#include <linux/gpio.h>
+
 static int cvi_wifi_power_gpio = -1;
+
+#define GPIO_PWR_BASE 0x05021000	// XGPIOE (from vendor config, not present in mainline DT)
+
+#define DW_GPIO_DR   0x00 // Data Register
+#define DW_GPIO_DDR  0x04 // Direction Register
+
+/* AIC8800 Pins */
+#define WIFI_PWR_PIN 15 // XGPIOA[15]
+#define WIFI_EN_PIN  7  // XGPIOE[7]
+
+/* Milk-V Duo S device labels */
+#define XGPIOA "3020000.gpio"
+#define SDIO1 "4320000.mmc"
+
+#define cls_dev_to_mmc_host(d)	container_of(d, struct mmc_host, class_dev)
+
+static int find_gpio_base(struct gpio_chip *chip, const void *data) {
+	if (strcmp(chip->label, (const char *)data) == 0) {
+		return 1;
+	}
+	return 0;
+}
+
+static int cvi_set_pin(int base, int pin, bool enable) {
+	void __iomem *pb;
+	u32 val;
+
+	pb = ioremap(base, 0x10);
+	if (!pb) {
+			pr_err("aicbsp: Failed to map hardware register at 0x%x\n", base);
+			return -ENOMEM;
+	}
+
+	if (enable) {
+			val = readl(pb + DW_GPIO_DDR);
+			writel(val | (1 << pin), pb + DW_GPIO_DDR);
+			val = readl(pb + DW_GPIO_DR);
+			writel(val | (1 << pin), pb + DW_GPIO_DR);
+	} else {
+			val = readl(pb + DW_GPIO_DR);
+			writel(val & ~(1 << pin), pb + DW_GPIO_DR);
+			val = readl(pb + DW_GPIO_DDR);
+			writel(val & ~(1 << pin), pb + DW_GPIO_DDR);
+	}
+
+	msleep(100);
+	iounmap(pb);
+	return 0;
+}
+
+static int match_mmc_host_child(struct device *dev, const void *data)
+{
+	if (dev->class && dev->class->name && !strcmp(dev->class->name, "mmc_host"))
+			return 1;
+	return 0;
+}
+
+static void cvi_sdio_rescan(void) {
+	const char *pdev_name = SDIO1;
+	struct device *pdev_dev;
+	struct device *host_dev;
+	struct mmc_host *host;
+
+	pdev_dev = bus_find_device_by_name(&platform_bus_type, NULL, pdev_name);
+	if (!pdev_dev) {
+			pr_err("aicbsp: Could not find platform device %s\n", pdev_name);
+			return;
+	}
+
+	host_dev = device_find_child(pdev_dev, NULL, match_mmc_host_child);
+	if (host_dev) {
+			host = cls_dev_to_mmc_host(host_dev);
+			pr_info("aicbsp: Triggering MMC rescan for %s\n", mmc_hostname(host));
+
+			mmc_detect_change(host, 0);
+
+			host->rescan_entered = 0;
+
+			put_device(host_dev);
+	} else {
+			pr_err("aicbsp: Could not find mmc_host child for %s\n", pdev_name);
+	}
+	put_device(pdev_dev);
+}
 #endif //CONFIG_PLATFORM_CVITEK
 
 static int aicbsp_platform_power_on(void);
@@ -499,9 +585,10 @@ static int aicbsp_platform_power_on(void)
 #endif /*CONFIG_PLATFORM_ROCKCHIP2*/
 
 #ifdef CONFIG_PLATFORM_CVITEK
-	printk("======== CVITEK WLAN_POWER_ON ========\n");
-	cvi_wifi_power_gpio = cvi_get_wifi_pwr_on_gpio();
-	if (cvi_wifi_power_gpio >= 0) {
+	printk("aicbsp: Powering on WiFi/BT\n");
+	struct gpio_device *device = gpio_device_find(XGPIOA, find_gpio_base);
+	if (device) {
+		cvi_wifi_power_gpio = gpio_device_get_base(device) + WIFI_PWR_PIN;
 		ret = gpio_request(cvi_wifi_power_gpio, "WLAN_POWER");
 		if (ret < 0) {
 			printk("%s: gpio_request(%d) for WLAN_POWER failed\n",
@@ -517,6 +604,16 @@ static int aicbsp_platform_power_on(void)
 			return -EIO;
 		}
 		mdelay(50);
+	}
+	/*
+	Vendor device tree specifies an extra GPIO chip, gpio4@5021000
+	With the mainline device tree, it resides in RTC protected memory (?)
+	and thus cannot be enabled with gpio_request and related functions.
+	Instead, we just write directly to the relevant registers.
+	*/
+	if (cvi_set_pin(GPIO_PWR_BASE, WIFI_EN_PIN, true) != 0) {
+		pr_err("aicbsp: Failed to set up WiFi enable pin\n");
+		return -1;
 	}
 #endif //CONFIG_PLATFORM_CVITEK
 
@@ -538,7 +635,7 @@ static int aicbsp_platform_power_on(void)
 #ifdef CONFIG_PLATFORM_CVITEK
 	printk("%s,%d: cvi_sdio_rescan\n", __func__, __LINE__);
 	cvi_sdio_rescan();
-	//udelay(1000);
+	mdelay(1000);
 #endif
 
 	if (down_timeout(&aic_chipup_sem, msecs_to_jiffies(2000)) == 0) {
@@ -565,11 +662,17 @@ static int aicbsp_platform_power_on(void)
 #endif /*CONFIG_PLATFORM_ROCKCHIP2*/
 
 #ifdef CONFIG_PLATFORM_CVITEK
+	pr_err("aicbsp: powering down\n");
 	if (cvi_wifi_power_gpio >= 0) {
 		ret = gpio_direction_output(cvi_wifi_power_gpio, 0);
 		if (ret) {
 			printk("%s: WLAN_POWER output low failed!\n", __func__);
 		}
+		gpio_free(cvi_wifi_power_gpio);
+	}
+	if (cvi_set_pin(GPIO_PWR_BASE, WIFI_EN_PIN, false) != 0) {
+		pr_err("aicbsp: Failed to set up WiFi enable pin\n");
+		return -1;
 	}
 #endif //CONFIG_PLATFORM_CVITEK
 
@@ -602,13 +705,16 @@ static void aicbsp_platform_power_off(void)
 #endif
 
 #ifdef CONFIG_PLATFORM_CVITEK
-	printk("======== CVITEK WLAN_POWER_OFF ========\n");
+	printk("aicbsp: Powering off WiFi/BT\n");
 	if (cvi_wifi_power_gpio >= 0) {
 		if(gpio_direction_output(cvi_wifi_power_gpio, 0)) {
 			printk("%s: WLAN_POWER output low failed!\n", __func__);
 		}
 	}
 	gpio_free(cvi_wifi_power_gpio);
+	if (cvi_set_pin(GPIO_PWR_BASE, WIFI_EN_PIN, false) != 0) {
+		pr_err("aicbsp: Failed to tear down WiFi power pin\n");
+	}
 #endif //CONFIG_PLATFORM_CVITEK
 
 	sdio_dbg("%s\n", __func__);
