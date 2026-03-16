@@ -14,7 +14,7 @@
 #include <linux/pci.h>
 #include "lmac_msg.h"
 
-#define RWNX_CONFIG_FW_NAME             "rwnx_settings.ini"
+#define RWNX_CONFIG_FW_NAME             "aic_userconfig_8800d80.txt"
 #define RWNX_PHY_CONFIG_TRD_NAME        "rwnx_trident.ini"
 #define RWNX_PHY_CONFIG_KARST_NAME      "rwnx_karst.ini"
 #define RWNX_AGC_FW_NAME                "agcram.bin"
